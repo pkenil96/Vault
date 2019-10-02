@@ -1,7 +1,6 @@
 import os
 import sys
 import boto3
-import argparse
 import hashlib
 from botocore.exceptions import NoCredentialsError
 
@@ -10,15 +9,16 @@ def upload_single_file_to_s3(filepath, targetName):
     s3 = boto3.resource('s3')
     try:
         s3.Bucket('securebox.backup').upload_file(filepath, targetName)
-        return 0 
+        return 0
     except FileNotFoundError:
         print('Something went wrong:: {}'.format(filepath))
         return -1
-    except NoCredentialsError:
+    except NoCredentialsError as e:
         print('Something went wrong:: {}'.format(str(e)))
         return -1
     except Exception as e:
         print('Something went wrong:: {}'.format(str(e)))
+
 
 def get_existing_file_hash():
     s3_cli = boto3.client('s3')
@@ -32,14 +32,16 @@ def get_existing_file_hash():
     except Exception as e:
         print('Something went wrong:: {}'.format(str(e)))
 
+
 def check_for_duplicate_files(filepath):
     try:
         existing_hashes = get_existing_file_hash()
         if filepath in existing_hashes:
             return True
         return False
-    except FileNotFoundError:
+    except FileNotFoundError as e:
         print('Something went wrong:: {}'.format(str(e)))
+
 
 def sync_folder_bucket():
     UPLOADED, FAILED, ALREADY_EXISTS = 0, 0, 0
@@ -47,31 +49,32 @@ def sync_folder_bucket():
         os.chdir(BACKUP_FOLDER_PATH)
         print('\nBacking up files from: [{}]\n'.format(os.getcwd()))
         all_files = os.listdir('.')
-        existing_file_hash = get_existing_file_hash()
         for _file_ in all_files:
             if os.path.isfile(_file_):
-                if calculate_hash(_file_ ) in get_existing_file_hash():
+                if calculate_hash(_file_) in get_existing_file_hash():
                     print('ALREADY EXISTS: [{}]'.format(_file_))
-                    ALREADY_EXISTS+=1
+                    ALREADY_EXISTS += 1
                 elif upload_single_file_to_s3(_file_, str(_file_)) == 0:
                     print('UPLOADED: [{}]'.format(str(_file_)))
-                    UPLOADED+=1
+                    UPLOADED += 1
                 else:
                     print('FAILED [{}].'.format(str(_file_)))
-                    FAILED+=1
+                    FAILED += 1
         return UPLOADED, FAILED, ALREADY_EXISTS
     except FileNotFoundError as e:
         print('Something went wrong:: {}'.format(str(e)))
         sys.exit(-1)
 
+
 def calculate_hash(filepath):
     hasher = hashlib.md5()
     try:
-        with open(filepath,"rb") as f:
-            hasher.update(f.read()) 
+        with open(filepath, "rb") as f:
+            hasher.update(f.read())
             return hasher.hexdigest()
     except FileNotFoundError as e:
         print('Something went wrong:: {}'.format(str(e)))
+
 
 if __name__ == '__main__':
 
@@ -86,7 +89,7 @@ if __name__ == '__main__':
     if len(sys.argv) > 2:
         print('Supplied more than 2 arguments: Ignoring the extra arguments')
 
-    #path of the backup folder
+    # path of the backup folder
     BACKUP_FOLDER_PATH = sys.argv[1]
 
     up, fail, dup = sync_folder_bucket()
@@ -95,8 +98,3 @@ if __name__ == '__main__':
     print('FAILED: {}'.format(fail))
     print('DUPLICATES: {}'.format(dup))
     print('***********************\n')
-
-
-
-
-
